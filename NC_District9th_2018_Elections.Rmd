@@ -1,0 +1,89 @@
+---
+title: "North Carolina's 9th District Election 2018"
+author: "Debi Gonzalez"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+
+library(readr)
+# Using this library to read in the file.
+nc_election <- read_csv("ps_4_elections-poll-nc09-3.csv")
+
+# The following libraries are necessary to access the functions necessary such as spread, filter and summarize.
+library(tidyverse)
+library(devtools)
+library(lubridate)
+library(gt)
+library(ggplot2)
+```
+
+
+
+### Allegiance of North Carolina's 9th District by Race
+```{r Table, echo = FALSE, results = TRUE}
+
+# Allegiance of North Carolina's Ninth District by Race
+nc_election %>%
+  select(response, race_eth, final_weight) %>%
+  # These are the variables necessary to show response by race considering final weight. Final weight is important because it will help us get the proper proportions of race to political identity/affiliation.
+  filter(race_eth != "[DO NOT READ] Don't know/Refused") %>% 
+  # We don't need those who did not have a classified race, so we will filter them out.
+  mutate(race_eth = fct_relevel(race_eth, c("White", "Black", "Hispanic", "Asian", "Other"))) %>%
+  # This mutate is to achieve the (race) list order of the model table.
+  group_by(response, race_eth) %>%
+  # Grouping in this order will help me spread the table later when I create the sum of final_weight variable.
+  summarize(total = sum(final_weight)) %>%
+  # Need to create this total variable in order to calculate the weighted number/proportions of response by race.
+  spread(key =  response, value = total, fill = 0) %>% 
+  # Spread so that our chart shows race in the first column and the response categories as the following set of columns. We use fill = 0 so that NA values can be calculated and weighted as well. 
+  mutate(all = Dem + Rep + Und + `3`) %>% 
+  mutate(Dem = Dem / all) %>% 
+  mutate(Rep = Rep / all) %>% 
+  mutate(Und = Und / all) %>% 
+  # This chunk of code creates the proportions from the total. It creates a set of variables that we can use to calculate the exact weighted proportions of our data.
+  select(-all, -`3`) %>% 
+  # This diselects the all and third party columns from the table we are about to make so that it does not show.
+  ungroup() %>% 
+  # Will now explicitly ungroup so that I don't carry my grouping settings (which facilitated the making of proportions) into the final chart. 
+  na_if(0) %>%
+  # Using this function to get rid of the 0 in the proportion of Asian undecided voters.
+  gt() %>% 
+  # This function from the gt library will help us format out tibble into a pretty chart.
+  fmt_percent(columns = vars(Dem, Rep, Und), decimals = 0) %>%
+  # Using fmt_percent and specifying the variables we want to use percentage for converts our proportions to percentage.
+  cols_label(race_eth = "", Dem = "DEM.", Rep = "REP.", Und = "UND.") %>%
+  tab_header(title = "Polling Results from North Carolina by Race") %>%
+  tab_source_note(source_note = "Source: New York Times Upshot/Siena College 2018 live polls")
+  # This chunk of code labels the columns to mirror those in the model graph, provides a title (which was originally missing), and a source. 
+```
+
+
+
+### Political Distribution of North Carolina's 9th District by Education & Gender
+```{r Graph, echo = FALSE, results = TRUE}
+# Distribution of Democrats and Republicans by Education Level by Gender.
+nc_election %>%
+  select(response, gender, educ, file_race) %>%
+  # These are the variables I am going to use in my plot. I selected file_race as well because I was testing this same data visual set up but with race instead of gender.
+  filter(educ != "[DO NOT READ] Refused", response %in% c("Rep", "Dem")) %>%
+  # I'm trying to clean my data of respondents who did not respond to the education variable and since I'm comparing Rep and Dem, I will filter for just the two identifications.
+  mutate(educ = fct_relevel(educ, c("Grade school", "High school", "Some college or trade school", "Bachelors' degree", "Graduate or Professional Degree"))) %>%
+  # This line will order my education level in a sort of chronological order, fascilitates the graph. 
+  group_by(response, educ) %>%
+  # Grouping by both response and education level will help more clealy see the patterns by respective category when graphed.
+  ggplot(aes(x=educ, y = response, color = educ)) + 
+  geom_jitter(show.legend = FALSE) + 
+  coord_flip() + 
+  facet_wrap(~gender) +
+  xlab(NULL) +
+  ylab("Political Affiliation") +
+  labs(title = "Political Affiliation by Education and Gender",
+       caption = "Source: New York Times Upshot/Siena College 2018 live polls")
+  # Chose jitter because out of all the plots I tried it best showed the distribution of my data by categories. Since I decided to facet_wrap by gender (only two side by side graphs), I colored by education to aid in the visualization of the distributions. The coordinate flip provided the most aesthetically pleasant version of the graph given that the education categories are long and would overlap at the bottom and the jitter plot would not show (as) significant data. I hid the legend because the graph is pretty self explanatory. I labeled the y axis (remember it's inverted), gave it a title and provided the source.
+
+# I decided the gender variable was more interesting because I can see how political affiliation vary by gender with increasing education level. Females with higher education more strongly identified as Democrats. While males with graduate degrees seem only slightly more likely to identify as Republican, those with some college or trade school are more likely to be republican than their female countrparts with the same education level.
+```
+
